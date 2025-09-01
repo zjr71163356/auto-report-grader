@@ -42,10 +42,56 @@
 
 ### 使用方法
 
-运行评分脚本：
+#### 快速开始
+
+1. **设置环境变量**：
+   ```bash
+   export OPENAI_API_KEY="your_api_key_here"
+   ```
+
+2. **安装依赖**：
+   ```bash
+   cd /home/tyrfly1001/LabTask/auto-report-grader
+   pip install -r requirements.txt
+   ```
+
+3. **运行评分脚本**：
+   ```bash
+   python score.py
+   ```
+
+4. **（可选）导入成绩到统计表**：
+   ```bash
+   python insert_score.py
+   ```
+
+#### 一键测试
+
+运行测试脚本，自动完成所有步骤：
 ```bash
-python score.py
+python test_grading_system.py
 ```
+
+#### 文件说明
+
+- `score.py`: 主要的评分脚本，读取 `/home/tyrfly1001/LabTask/task1/collected` 目录下的学生作业并评分
+- `insert_score.py`: 将评分结果导入到现有成绩统计表
+- `test_grading_system.py`: 一键测试脚本，自动化整个流程
+- `requirements.txt`: Python依赖列表
+
+#### 配置说明
+
+评分系统会自动：
+1. 读取 `/home/tyrfly1001/LabTask/task1/collected` 目录下的所有学生文件夹
+2. 解压每个文件夹内的ZIP文件
+3. 提取支持格式的文件内容（.txt, .md, .py, .java, .pdf, .docx等）
+4. 使用LLM根据 `/home/tyrfly1001/LabTask/task1/criteria/criteria.md` 中的评分标准进行评分
+5. 生成 `LLM_评分结果.xlsx` 评分报告
+
+#### 输出文件
+
+- `LLM_评分结果.xlsx`: 包含学号、姓名、分数和评语的详细评分结果
+- `成绩统计表_已更新.xlsx`: 如果运行了成绩导入，会生成更新后的成绩统计表
 
 ---
 
@@ -87,7 +133,53 @@ This is an AI-powered auto-grading system for student lab reports based on Large
 
 ### Usage
 
-Run the grading script:
+#### Quick Start
+
+1. **Set Environment Variable**:
+   ```bash
+   export OPENAI_API_KEY="your_api_key_here"
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   cd /home/tyrfly1001/LabTask/auto-report-grader
+   pip install -r requirements.txt
+   ```
+
+3. **Run Grading Script**:
+   ```bash
+   python score.py
+   ```
+
+4. **(Optional) Import Grades to Statistics Table**:
+   ```bash
+   python insert_score.py
+   ```
+
+#### One-click Test
+
+Run the test script to automatically complete all steps:
 ```bash
-python score.py
+python test_grading_system.py
 ```
+
+#### File Descriptions
+
+- `score.py`: The main grading script that reads and grades student submissions in the `/home/tyrfly1001/LabTask/task1/collected` directory.
+- `insert_score.py`: Imports grading results into the existing grade statistics table.
+- `test_grading_system.py`: One-click test script that automates the entire process.
+- `requirements.txt`: Python dependencies list.
+
+#### Configuration Details
+
+The grading system will automatically:
+1. Read all student folders in the `/home/tyrfly1001/LabTask/task1/collected` directory.
+2. Extract ZIP files within each folder.
+3. Extract content from supported file formats (.txt, .md, .py, .java, .pdf, .docx, etc.).
+4. Grade submissions based on the criteria in `/home/tyrfly1001/LabTask/task1/criteria/criteria.md` using the LLM.
+5. Generate the `LLM_评分结果.xlsx` grading report.
+
+#### Output Files
+
+- `LLM_评分结果.xlsx`: Detailed grading results including student ID, name, score, and comments.
+- `成绩统计表_已更新.xlsx`: Updated grade statistics table if the grade import was run.

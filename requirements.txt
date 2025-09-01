@@ -5,3 +5,8 @@ python-docx
 PyPDF2
 six>=1.16.0
 python-dateutil
+numpy
+Pillow
+pytesseract
+xlrd
+rarfile
