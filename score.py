@@ -23,7 +23,8 @@ if "OPENAI_API_KEY" not in os.environ:
     print("请设置环境变量 'OPENAI_API_KEY'。")
     exit()
 
-client = OpenAI()
+client = OpenAI(api_key="sk-wqhpgessbhaoebhvjxrodtggxescyspglxeuwvjxygdyjdja",
+                base_url="https://api.siliconflow.cn/v1")
 LLM_MODEL = "deepseek-ai/DeepSeek-V3"
 
 
