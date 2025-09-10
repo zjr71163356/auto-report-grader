@@ -10,6 +10,17 @@ import json
 from openai import OpenAI
 import subprocess
 import docx  # 用于处理 .docx 文件
+
+# 导入配置
+from config import (
+    OPENAI_API_KEY, OPENAI_BASE_URL, LLM_MODEL,
+    COLLECTED_DIR, RUBRIC_FILE, OUTPUT_FILENAME,
+    SUPPORTED_EXTENSIONS, ZIP_EXTENSIONS, RAR_EXTENSIONS,
+    OCR_LANGUAGES, SCORING_TEMPERATURE,
+    MIN_SCORE, MAX_SCORE, DEFAULT_SCORE,
+    VERBOSE_LOGGING
+)
+
 try:
     import rarfile
     RARFILE_AVAILABLE = True
@@ -17,26 +28,28 @@ except ImportError:
     RARFILE_AVAILABLE = False
     print("警告: rarfile 包未安装，无法解压 RAR 文件。请运行 'pip install rarfile' 安装。")
 # --- 配置 ---
-# 脚本将自动从环境变量中读取 'OPENAI_API_KEY' 和 'OPENAI_BASE_URL'。
-if "OPENAI_API_KEY" not in os.environ:
+# API 配置检查
+if not OPENAI_API_KEY:
     print("错误：未找到 OpenAI API 密钥。")
     print("请设置环境变量 'OPENAI_API_KEY'。")
     exit()
 
-client = OpenAI(api_key="sk-wqhpgessbhaoebhvjxrodtggxescyspglxeuwvjxygdyjdja",
-                base_url="https://api.siliconflow.cn/v1")
-LLM_MODEL = "deepseek-ai/DeepSeek-V3"
+# 初始化 OpenAI 客户端
+client = OpenAI(
+    api_key=OPENAI_API_KEY,
+    base_url=OPENAI_BASE_URL
+)
 
 
 def extract_text_from_folder(folder_path):
     """
     (已修改) 递归地从多种文件类型中提取文本。
     """
-    print(f"  - 开始从 {os.path.basename(folder_path)} 提取文本...")
+    if VERBOSE_LOGGING:
+        print(f"  - 开始从 {os.path.basename(folder_path)} 提取文本...")
     full_text = ""
-    # 支持的扩展名列表
-    supported_extensions = ['*.txt', '*.md', '*.py',
-                            '*.java', '*.pdf', '*.docx', '*.doc']
+    # 使用配置中的支持扩展名列表
+    supported_extensions = SUPPORTED_EXTENSIONS
 
     files_to_process = []
     for ext in supported_extensions:
@@ -45,7 +58,8 @@ def extract_text_from_folder(folder_path):
             folder_path, '**', ext), recursive=True))
 
     if not files_to_process:
-        print("    - 未找到支持的文本文件。")
+        if VERBOSE_LOGGING:
+            print("    - 未找到支持的文本文件。")
         return "[内容为空或文件格式不支持]"
 
     for file_path in files_to_process:
@@ -80,9 +94,9 @@ def extract_text_from_folder(folder_path):
                                             image_part.blob)
                                         image = Image.open(image_stream)
 
-                                        # 使用Tesseract进行OCR，同时支持英文和简体中文
+                                        # 使用配置中的OCR语言设置
                                         ocr_text = pytesseract.image_to_string(
-                                            image, lang='eng+chi_sim')
+                                            image, lang=OCR_LANGUAGES)
 
                                         if ocr_text.strip():
                                             # 将OCR结果作为一个独立的部分添加
@@ -199,7 +213,8 @@ def analyze_with_llm(student_content, rubric):
     """
 
     try:
-        print("  - 正在调用 LLM 进行分析...")
+        if VERBOSE_LOGGING:
+            print("  - 正在调用 LLM 进行分析...")
         response = client.chat.completions.create(
             model=LLM_MODEL,
             messages=[
@@ -207,28 +222,33 @@ def analyze_with_llm(student_content, rubric):
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.2,
+            temperature=SCORING_TEMPERATURE,
         )
 
         result_json = json.loads(response.choices[0].message.content)
-        score = float(result_json.get('score', 5.0))
+        score = float(result_json.get('score', DEFAULT_SCORE))
         comment = result_json.get('comment', "LLM未提供评语，请手动检查。")
 
-        # 确保分数在合理范围内
-        score = max(0, min(10, score))
+        # 确保分数在配置的合理范围内
+        score = max(MIN_SCORE, min(MAX_SCORE, score))
 
-        print(f"  - LLM分析完成。")
+        if VERBOSE_LOGGING:
+            print(f"  - LLM分析完成。")
         return score, comment
 
     except Exception as e:
         print(f"  - LLM API 调用失败: {e}")
-        return 5.0, f"LLM分析失败，请手动评分。错误信息: {e}"
+        return DEFAULT_SCORE, f"LLM分析失败，请手动评分。错误信息: {e}"
 
 
-def main(current_dir, rubric_path):
+def main(current_dir=None, rubric_path=None):
     """
     主函数，遍历学生文件夹，处理内部的zip文件，使用LLM分析，并创建Excel报告。
     """
+    # 使用配置中的默认路径，如果没有提供参数
+    current_dir = current_dir or str(COLLECTED_DIR)
+    rubric_path = rubric_path or str(RUBRIC_FILE)
+
     try:
         # 读取评分标准文件
         with open(rubric_path, 'r', encoding='utf-8') as f:
@@ -255,13 +275,18 @@ def main(current_dir, rubric_path):
         extract_path = os.path.join(current_dir, student_name)
         print(f"\n正在处理: {student_name}")
 
-        # 递归查找并解压文件夹内的所有 .zip、.rar 文件
+        # 递归查找并解压文件夹内的所有压缩文件
         try:
             # 查找压缩文件
-            zip_files = glob.glob(os.path.join(
-                extract_path, '**', '*.zip'), recursive=True)
-            rar_files = glob.glob(os.path.join(
-                extract_path, '**', '*.rar'), recursive=True)
+            zip_files = []
+            for ext in ZIP_EXTENSIONS:
+                zip_files.extend(glob.glob(os.path.join(
+                    extract_path, '**', ext), recursive=True))
+
+            rar_files = []
+            for ext in RAR_EXTENSIONS:
+                rar_files.extend(glob.glob(os.path.join(
+                    extract_path, '**', ext), recursive=True))
 
             # 解压 ZIP 文件
             if zip_files:
@@ -340,7 +365,7 @@ def main(current_dir, rubric_path):
 
     # 生成 Excel 报告
     df = pd.DataFrame(results)
-    output_filename = os.path.join(current_dir, 'LLM_评分结果.xlsx')
+    output_filename = os.path.join(current_dir, OUTPUT_FILENAME)
     df.to_excel(output_filename, index=False, engine='openpyxl')
     print(f"\n所有评分完成！结果已保存到 {output_filename}")
 
@@ -358,8 +383,5 @@ def main(current_dir, rubric_path):
 
 
 if __name__ == '__main__':
-    # 配置路径
-    collected_dir = '/home/tyrfly1001/LabTask/task1/collected'
-    rubric_file = '/home/tyrfly1001/LabTask/task1/criteria/criteria.md'
-
-    main(collected_dir, rubric_file)
+    # 使用配置文件中的路径
+    main()
